@@ -1,0 +1,1375 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>스킬 시스템 시뮬레이터</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, '맑은 고딕', sans-serif;
+    background: #f7f7f5;
+    color: #1a1a1a;
+    margin: 0;
+    padding: 20px;
+    line-height: 1.5;
+  }
+  .container {
+    max-width: 900px;
+    margin: 0 auto;
+  }
+  h1 {
+    font-size: 22px;
+    font-weight: 500;
+    margin: 0 0 20px 0;
+  }
+  .tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+    border-bottom: 1px solid #e5e5e0;
+    padding-bottom: 12px;
+  }
+  .tab-btn {
+    background: transparent;
+    border: 1px solid #d0d0c8;
+    border-radius: 8px;
+    padding: 8px 16px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.15s;
+  }
+  .tab-btn:hover { background: #ececea; }
+  .tab-btn.active { background: #e6f1fb; color: #0c447c; border-color: #b5d4f4; }
+  
+  .panel {
+    background: #f1efe8;
+    border-radius: 8px;
+    padding: 14px;
+    margin-bottom: 16px;
+  }
+  .panel-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 10px;
+  }
+  .panel-row:last-child { margin-bottom: 0; }
+  .panel-label {
+    font-size: 13px;
+    color: #5f5e5a;
+    min-width: 130px;
+  }
+  input[type=range] { flex: 1; }
+  .val-display {
+    font-size: 13px;
+    font-weight: 500;
+    min-width: 50px;
+    text-align: right;
+  }
+  select {
+    flex: 1;
+    padding: 5px 8px;
+    font-size: 13px;
+    border: 1px solid #d0d0c8;
+    border-radius: 6px;
+    background: white;
+  }
+  button.action-btn {
+    background: white;
+    border: 1px solid #d0d0c8;
+    border-radius: 8px;
+    padding: 8px 12px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    transition: all 0.15s;
+  }
+  button.action-btn:hover { background: #f1efe8; }
+  button.action-btn:active { transform: scale(0.98); }
+  
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+  .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .grid-5 { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+  
+  .stat-card {
+    background: #f1efe8;
+    border-radius: 8px;
+    padding: 12px;
+  }
+  .stat-label { font-size: 12px; color: #5f5e5a; margin-bottom: 4px; }
+  .stat-value { font-size: 18px; font-weight: 500; }
+  
+  canvas {
+    background: white;
+    border: 1px solid #e5e5e0;
+    border-radius: 12px;
+    display: block;
+    width: 100%;
+    height: auto;
+    cursor: crosshair;
+  }
+  .canvas-wrap {
+    padding: 16px;
+    background: white;
+    border: 1px solid #e5e5e0;
+    border-radius: 12px;
+    margin-bottom: 12px;
+  }
+  
+  .formula-box {
+    background: #f1efe8;
+    border-radius: 8px;
+    padding: 12px;
+    font-size: 12px;
+    color: #5f5e5a;
+    font-family: 'Consolas', 'Menlo', monospace;
+    line-height: 1.6;
+  }
+  .formula-title {
+    font-weight: 500;
+    color: #1a1a1a;
+    margin-bottom: 6px;
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+  
+  .curve-btn, .mode-btn {
+    background: white;
+    border: 1px solid #d0d0c8;
+    border-radius: 6px;
+    padding: 6px 4px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .curve-btn:hover, .mode-btn:hover { background: #f1efe8; }
+  .curve-btn.active, .mode-btn.active {
+    background: #e6f1fb;
+    color: #0c447c;
+    border-color: #b5d4f4;
+  }
+  
+  .info-text {
+    font-size: 12px;
+    color: #5f5e5a;
+    margin: 8px 0;
+  }
+  
+  .sim-view { display: none; }
+  .sim-view.active { display: block; }
+  
+  .section-title {
+    font-size: 16px;
+    font-weight: 500;
+    margin: 0 0 12px 0;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>스킬 시스템 시뮬레이터</h1>
+  
+  <div class="tabs">
+    <button class="tab-btn active" data-sim="guardian">회전 수호 구체</button>
+    <button class="tab-btn" data-sim="chain">체인 라이트닝</button>
+    <button class="tab-btn" data-sim="curve">발사체 곡선</button>
+    <button class="tab-btn" data-sim="beam">지속형 빔</button>
+  </div>
+  
+  <!-- ========== 회전 수호 구체 ========== -->
+  <div id="sim-guardian" class="sim-view active">
+    <div class="grid-2">
+      <div class="panel">
+        <div class="panel-row">
+          <label class="panel-label">OrbCount</label>
+          <input type="range" id="g_orbCount" min="1" max="16" value="4" step="1">
+          <span class="val-display" id="g_orbCountVal">4</span>
+        </div>
+        <div class="panel-row">
+          <label class="panel-label">OrbitRadius</label>
+          <input type="range" id="g_orbitRadius" min="0.5" max="5" value="2.5" step="0.1">
+          <span class="val-display" id="g_orbitRadiusVal">2.5</span>
+        </div>
+        <div class="panel-row">
+          <label class="panel-label">OrbRadius</label>
+          <input type="range" id="g_orbRadius" min="0.1" max="1.5" value="0.6" step="0.1">
+          <span class="val-display" id="g_orbRadiusVal">0.6</span>
+        </div>
+        <div class="panel-row">
+          <label class="panel-label">InitialAngle</label>
+          <input type="range" id="g_initialAngle" min="0" max="360" value="0" step="5">
+          <span class="val-display" id="g_initialAngleVal">0°</span>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-row">
+          <label class="panel-label">RotateSpeed</label>
+          <input type="range" id="g_rotateSpeed" min="-720" max="720" value="180" step="10">
+          <span class="val-display" id="g_rotateSpeedVal">180°/s</span>
+        </div>
+        <div class="panel-row">
+          <label class="panel-label">Oscillation</label>
+          <input type="range" id="g_oscillation" min="0" max="2" value="0" step="0.1">
+          <span class="val-display" id="g_oscillationVal">0</span>
+        </div>
+        <div class="panel-row">
+          <label class="panel-label">OscSpeed</label>
+          <input type="range" id="g_oscSpeed" min="0" max="3" value="1" step="0.1">
+          <span class="val-display" id="g_oscSpeedVal">1.0</span>
+        </div>
+        <div class="panel-row">
+          <label class="panel-label">Direction</label>
+          <select id="g_direction">
+            <option value="CCW">CCW (반시계)</option>
+            <option value="CW">CW (시계)</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    
+    <div class="grid-4" style="margin: 14px 0;">
+      <button class="action-btn" id="g_playBtn">⏸ 일시정지</button>
+      <button class="action-btn" id="g_resetBtn">↻ 리셋</button>
+      <button class="action-btn" id="g_trailBtn">━ 궤적 ON</button>
+      <button class="action-btn" id="g_moveBtn">↗ 앵커 이동</button>
+    </div>
+    
+    <div class="canvas-wrap">
+      <canvas id="g_canvas" width="800" height="500"></canvas>
+    </div>
+    
+    <div class="grid-4" style="margin-bottom: 14px;">
+      <div class="stat-card">
+        <div class="stat-label">경과 시간</div>
+        <div class="stat-value" id="g_elapsedTime">0.00s</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">구체 간격</div>
+        <div class="stat-value" id="g_orbGap">90°</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">현재 반경</div>
+        <div class="stat-value" id="g_curRadius">2.5m</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">구체 선속도</div>
+        <div class="stat-value" id="g_orbVelocity">7.85m/s</div>
+      </div>
+    </div>
+    
+    <div class="formula-box">
+      <div class="formula-title">현재 계산 (Orb #0)</div>
+      <div>baseAngle(0) = InitialAngle + (360/OrbCount)×0 = <span id="g_debugBase">0°</span></div>
+      <div>currentAngle(0,t) = baseAngle + RotateSpeed×t×dir = <span id="g_debugCurrent">0°</span></div>
+      <div>radius(t) = OrbitRadius + Oscillation × sin(OscSpeed×t×2π) = <span id="g_debugRadius">2.5</span></div>
+      <div>position.x = anchor.x + cos(rad) × radius = <span id="g_debugX">2.5</span></div>
+      <div>position.z = anchor.z + sin(rad) × radius = <span id="g_debugZ">0.0</span></div>
+    </div>
+  </div>
+  
+  <!-- ========== 발사체 곡선 ========== -->
+  <div id="sim-curve" class="sim-view">
+    <div class="grid-3" style="margin-bottom: 14px;">
+      <button class="curve-btn active" data-curve="Sine">∿ Sine</button>
+      <button class="curve-btn" data-curve="Bezier">⌒ Bezier</button>
+      <button class="curve-btn" data-curve="Zigzag">⩘ Zigzag</button>
+    </div>
+    
+    <div class="panel">
+      <div class="grid-2">
+        <div>
+          <div class="panel-row">
+            <label class="panel-label">Speed (m/s)</label>
+            <input type="range" id="c_speed" min="2" max="20" value="8" step="0.5">
+            <span class="val-display" id="c_speedVal">8.0</span>
+          </div>
+          <div class="panel-row">
+            <label class="panel-label">Amplitude (m)</label>
+            <input type="range" id="c_amplitude" min="0" max="5" value="1.0" step="0.1">
+            <span class="val-display" id="c_amplitudeVal">1.0</span>
+          </div>
+          <div class="panel-row">
+            <label class="panel-label">Frequency (Hz)</label>
+            <input type="range" id="c_frequency" min="0.2" max="8" value="1.5" step="0.1">
+            <span class="val-display" id="c_frequencyVal">1.5</span>
+          </div>
+        </div>
+        <div>
+          <div class="panel-row">
+            <label class="panel-label">Direction</label>
+            <select id="c_direction">
+              <option value="Right">Right</option>
+              <option value="Left">Left</option>
+              <option value="Up">Up</option>
+              <option value="Down">Down</option>
+            </select>
+          </div>
+          <div class="panel-row">
+            <label class="panel-label">Phase (°)</label>
+            <input type="range" id="c_phase" min="0" max="360" value="0" step="10">
+            <span class="val-display" id="c_phaseVal">0°</span>
+          </div>
+          <div class="panel-row">
+            <label class="panel-label">LifeTime (초)</label>
+            <input type="range" id="c_lifeTime" min="1" max="6" value="3" step="0.5">
+            <span class="val-display" id="c_lifeTimeVal">3.0</span>
+          </div>
+        </div>
+      </div>
+      <div id="c_homingPanel" style="display: none; margin-top: 10px; padding-top: 10px; border-top: 1px solid #d0d0c8;">
+        <div class="grid-2">
+          <div class="panel-row" style="margin: 0;">
+            <label class="panel-label">TurnSpeed (°/s)</label>
+            <input type="range" id="c_turnSpeed" min="30" max="540" value="180" step="10">
+            <span class="val-display" id="c_turnSpeedVal">180</span>
+          </div>
+          <div class="panel-row" style="margin: 0;">
+            <label class="panel-label">MaxAngle (°)</label>
+            <input type="range" id="c_maxAngle" min="30" max="180" value="150" step="10">
+            <span class="val-display" id="c_maxAngleVal">150°</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="grid-4" style="margin-bottom: 14px;">
+      <button class="action-btn" id="c_fireBtn">🚀 발사</button>
+      <button class="action-btn" id="c_autoFireBtn">⚡ <span id="c_autoFireText">자동 발사</span></button>
+      <button class="action-btn" id="c_clearBtn">🗑 궤적 지우기</button>
+      <button class="action-btn" id="c_moveTargetBtn">⊕ <span id="c_moveTargetText">타겟 이동</span></button>
+    </div>
+    
+    <div class="canvas-wrap">
+      <canvas id="c_canvas" width="800" height="500"></canvas>
+    </div>
+    
+    <div class="info-text">캔버스 클릭으로 발사 또는 타겟 이동 · 격자 1칸 = 1m</div>
+    
+    <div class="formula-box" id="c_formulaPanel">
+      <div class="formula-title">현재 공식 (Sine)</div>
+      <div>forwardPos = startPos + baseDirection × Speed × t</div>
+      <div>offset = sin(2π × Frequency × t + Phase) × Amplitude</div>
+      <div>finalPos = forwardPos + perpDirection × offset</div>
+    </div>
+  </div>
+  
+  <!-- ========== 체인 라이트닝 ========== -->
+  <div id="sim-chain" class="sim-view">
+    <div class="grid-2">
+      <div class="panel">
+        <div class="panel-row"><label class="panel-label">MaxChainCount</label><input type="range" id="ch_maxChain" min="0" max="12" value="4" step="1"><span class="val-display" id="ch_maxChainVal">4</span></div>
+        <div class="panel-row"><label class="panel-label">SearchRange (m)</label><input type="range" id="ch_searchRange" min="1" max="10" value="5" step="0.5"><span class="val-display" id="ch_searchRangeVal">5.0</span></div>
+        <div class="panel-row"><label class="panel-label">BounceDelay (초)</label><input type="range" id="ch_bounceDelay" min="0.05" max="0.5" value="0.15" step="0.05"><span class="val-display" id="ch_bounceDelayVal">0.15</span></div>
+      </div>
+      <div class="panel">
+        <div class="panel-row"><label class="panel-label">DamageRatio</label><input type="range" id="ch_damageRatio" min="0.5" max="5" value="3.2" step="0.1"><span class="val-display" id="ch_damageRatioVal">3.2</span></div>
+        <div class="panel-row"><label class="panel-label">DamageDecay</label><input type="range" id="ch_damageDecay" min="0.3" max="1.2" value="0.8" step="0.05"><span class="val-display" id="ch_damageDecayVal">0.80</span></div>
+        <div class="panel-row"><label class="panel-label">ChainPriority</label><select id="ch_priority"><option value="Nearest">Nearest</option><option value="LowHP">LowHP</option><option value="HighHP">HighHP</option><option value="Random">Random</option></select></div>
+      </div>
+    </div>
+    <div class="grid-3" style="margin-top: 12px;">
+      <div class="panel" style="margin:0;"><div class="panel-row" style="margin:0;"><label class="panel-label" style="min-width:90px;">AllowReChain</label><select id="ch_allowReChain"><option value="false">False</option><option value="true">True</option></select></div></div>
+      <div class="panel" style="margin:0;"><div class="panel-row" style="margin:0;"><label class="panel-label" style="min-width:50px;">적 수</label><input type="range" id="ch_enemyCount" min="5" max="20" value="10" step="1"><span class="val-display" id="ch_enemyCountVal">10</span></div></div>
+      <div class="panel" style="margin:0;"><div class="panel-row" style="margin:0;"><label class="panel-label" style="min-width:50px;">분포</label><select id="ch_layout"><option value="cluster">군집</option><option value="line">일렬</option><option value="random">분산</option><option value="circle">원형</option></select></div></div>
+    </div>
+    <div class="grid-4" style="margin: 14px 0;">
+      <button class="action-btn" id="ch_castBtn">⚡ 발동</button>
+      <button class="action-btn" id="ch_autoBtn">↻ 자동 시전</button>
+      <button class="action-btn" id="ch_resetBtn">↩ 적 부활</button>
+      <button class="action-btn" id="ch_newBtn">⊕ 적 재배치</button>
+    </div>
+    <div class="canvas-wrap"><canvas id="ch_canvas" width="800" height="560"></canvas></div>
+    <div class="info-text">캔버스 클릭으로 초기 타겟 지정 · 격자 1칸 = 1m · 적 모두 사망 시 자동 부활</div>
+    <div class="grid-4" style="margin-bottom: 14px;">
+      <div class="stat-card"><div class="stat-label">총 타격 수</div><div class="stat-value" id="ch_totalHits">0</div></div>
+      <div class="stat-card"><div class="stat-label">총 데미지</div><div class="stat-value" id="ch_totalDamage">0</div></div>
+      <div class="stat-card"><div class="stat-label">시전 횟수</div><div class="stat-value" id="ch_castCount">0</div></div>
+      <div class="stat-card"><div class="stat-label">사망 적</div><div class="stat-value" id="ch_killCount">0</div></div>
+    </div>
+    <div class="log-box"><div class="formula-title">전이 로그 (마지막 시전)</div><div id="ch_log" style="max-height:120px; overflow-y:auto;">아직 발동되지 않았습니다.</div></div>
+  </div>
+
+  <!-- ========== 지속형 빔 ========== -->
+  <div id="sim-beam" class="sim-view">
+    <div class="grid-2">
+      <div class="panel">
+        <div class="panel-row"><label class="panel-label">BeamLength (m)</label><input type="range" id="bm_length" min="3" max="15" value="8" step="0.5"><span class="val-display" id="bm_lengthVal">8.0</span></div>
+        <div class="panel-row"><label class="panel-label">BeamWidth (m)</label><input type="range" id="bm_width" min="0.2" max="3" value="0.8" step="0.1"><span class="val-display" id="bm_widthVal">0.8</span></div>
+        <div class="panel-row"><label class="panel-label">Duration (초)</label><input type="range" id="bm_duration" min="0.5" max="10" value="3" step="0.5"><span class="val-display" id="bm_durationVal">3.0</span></div>
+      </div>
+      <div class="panel">
+        <div class="panel-row"><label class="panel-label">DamageRatio</label><input type="range" id="bm_damage" min="0.1" max="5" value="1.0" step="0.1"><span class="val-display" id="bm_damageVal">1.0</span></div>
+        <div class="panel-row"><label class="panel-label">TickInterval (초)</label><input type="range" id="bm_tick" min="0.05" max="1" value="0.2" step="0.05"><span class="val-display" id="bm_tickVal">0.20</span></div>
+        <div class="panel-row"><label class="panel-label">최대 타격 적</label><input type="range" id="bm_maxTargets" min="0" max="20" value="0" step="1"><span class="val-display" id="bm_maxTargetsVal">∞</span></div>
+      </div>
+    </div>
+    <div class="grid-3" style="margin-top: 12px;">
+      <div class="panel" style="margin:0;"><div class="panel-row" style="margin:0;"><label class="panel-label" style="min-width:70px;">조준</label><select id="bm_aimMode"><option value="follow">회전 추적</option><option value="fixed">발사 고정</option><option value="lock">타겟 락온</option></select></div></div>
+      <div class="panel" style="margin:0;"><div class="panel-row" style="margin:0;"><label class="panel-label" style="min-width:70px;">시전자</label><select id="bm_casterRotate"><option value="manual">수동(마우스)</option><option value="auto">자동 회전</option><option value="aim">가까운적 추적</option></select></div></div>
+      <div class="panel" style="margin:0;"><div class="panel-row" style="margin:0;"><label class="panel-label" style="min-width:70px;">충돌</label><select id="bm_hitMode"><option value="pierce">관통</option><option value="block">차단</option></select></div></div>
+    </div>
+    <div class="grid-3" style="margin-top: 8px;">
+      <div class="panel" style="margin:0;"><div class="panel-row" style="margin:0;"><label class="panel-label" style="min-width:50px;">적 수</label><input type="range" id="bm_enemyCount" min="3" max="20" value="10" step="1"><span class="val-display" id="bm_enemyCountVal">10</span></div></div>
+      <div class="panel" style="margin:0;"><div class="panel-row" style="margin:0;"><label class="panel-label" style="min-width:50px;">분포</label><select id="bm_layout"><option value="circle">원형</option><option value="line">일렬</option><option value="cluster">군집</option><option value="moving">움직임</option></select></div></div>
+      <div class="panel" style="margin:0;"><div class="panel-row" style="margin:0;"><label class="panel-label" style="min-width:50px;">색상</label><select id="bm_color"><option value="lightning">번개</option><option value="laser">레이저</option><option value="frost">서리</option><option value="holy">신성</option></select></div></div>
+    </div>
+    <div class="grid-4" style="margin: 14px 0;">
+      <button class="action-btn" id="bm_castBtn">🔥 빔 시전</button>
+      <button class="action-btn" id="bm_autoBtn">↻ 자동 시전</button>
+      <button class="action-btn" id="bm_resetBtn">↩ 적 부활</button>
+      <button class="action-btn" id="bm_newBtn">⊕ 적 재배치</button>
+    </div>
+    <div class="canvas-wrap"><canvas id="bm_canvas" width="800" height="560"></canvas></div>
+    <div class="info-text">캔버스 마우스 이동으로 조준 · 클릭으로 시전 · 격자 1칸 = 1m</div>
+    <div class="grid-5">
+      <div class="stat-card"><div class="stat-label">시전 상태</div><div class="stat-value" id="bm_status">대기</div></div>
+      <div class="stat-card"><div class="stat-label">남은 시간</div><div class="stat-value" id="bm_remain">-</div></div>
+      <div class="stat-card"><div class="stat-label">총 틱 수</div><div class="stat-value" id="bm_ticks">0</div></div>
+      <div class="stat-card"><div class="stat-label">총 데미지</div><div class="stat-value" id="bm_totalDmg">0</div></div>
+      <div class="stat-card"><div class="stat-label">현재 적중</div><div class="stat-value" id="bm_curHit">0명</div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ==================================================
+// 공통: 탭 전환
+// ==================================================
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const sim = btn.dataset.sim;
+    document.querySelectorAll('.sim-view').forEach(v => v.classList.remove('active'));
+    document.getElementById('sim-' + sim).classList.add('active');
+  });
+});
+
+// 슬라이더 값 표시 헬퍼
+function bindSlider(id, valId, suffix, decimals) {
+  const slider = document.getElementById(id);
+  const valSpan = document.getElementById(valId);
+  if (!slider || !valSpan) return;
+  const update = () => {
+    const val = parseFloat(slider.value);
+    valSpan.textContent = (decimals !== undefined ? val.toFixed(decimals) : val) + (suffix || '');
+  };
+  slider.addEventListener('input', update);
+  update();
+}
+
+// ==================================================
+// 시뮬레이터 1: 회전 수호 구체
+// ==================================================
+(function() {
+  const canvas = document.getElementById('g_canvas');
+  const ctx = canvas.getContext('2d');
+  
+  let elapsedTime = 0;
+  let isPlaying = true;
+  let showTrail = false;
+  let anchorMoving = false;
+  let anchorPhase = 0;
+  const trails = [];
+  const MAX_TRAIL = 100;
+  let lastTimestamp = null;
+  const SCALE = 50;
+  
+  function getParams() {
+    return {
+      orbCount: parseInt(document.getElementById('g_orbCount').value),
+      orbitRadius: parseFloat(document.getElementById('g_orbitRadius').value),
+      orbRadius: parseFloat(document.getElementById('g_orbRadius').value),
+      initialAngle: parseFloat(document.getElementById('g_initialAngle').value),
+      rotateSpeed: parseFloat(document.getElementById('g_rotateSpeed').value),
+      oscillation: parseFloat(document.getElementById('g_oscillation').value),
+      oscSpeed: parseFloat(document.getElementById('g_oscSpeed').value),
+      direction: document.getElementById('g_direction').value
+    };
+  }
+  
+  function calcOrbPosition(i, t, p) {
+    const baseAngle = p.initialAngle + (360 / p.orbCount) * i;
+    const dirMult = (p.direction === 'CCW') ? 1 : -1;
+    const currentAngle = baseAngle + p.rotateSpeed * t * dirMult;
+    const radius = p.orbitRadius + p.oscillation * Math.sin(p.oscSpeed * t * 2 * Math.PI);
+    const rad = currentAngle * Math.PI / 180;
+    return {
+      x: Math.cos(rad) * radius,
+      z: Math.sin(rad) * radius,
+      angle: currentAngle,
+      baseAngle: baseAngle,
+      radius: radius
+    };
+  }
+  
+  function getAnchor() {
+    if (anchorMoving) {
+      anchorPhase += 0.01;
+      return { x: Math.cos(anchorPhase) * 1.5, z: Math.sin(anchorPhase * 0.7) * 1.0 };
+    }
+    return { x: 0, z: 0 };
+  }
+  
+  function worldToScreen(wx, wz) {
+    return {
+      x: canvas.width / 2 + wx * SCALE,
+      y: canvas.height / 2 + wz * SCALE
+    };
+  }
+  
+  function draw() {
+    const p = getParams();
+    const anchor = getAnchor();
+    
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // 격자
+    ctx.strokeStyle = 'rgba(0,0,0,0.06)';
+    ctx.lineWidth = 0.5;
+    for (let i = -10; i <= 10; i++) {
+      const px = canvas.width / 2 + i * SCALE;
+      const py = canvas.height / 2 + i * SCALE;
+      ctx.beginPath();
+      ctx.moveTo(px, 0); ctx.lineTo(px, canvas.height); ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(0, py); ctx.lineTo(canvas.width, py); ctx.stroke();
+    }
+    
+    ctx.strokeStyle = 'rgba(0,0,0,0.15)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, canvas.height/2); ctx.lineTo(canvas.width, canvas.height/2); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(canvas.width/2, 0); ctx.lineTo(canvas.width/2, canvas.height); ctx.stroke();
+    
+    // 궤도 원
+    const anchorScreen = worldToScreen(anchor.x, anchor.z);
+    ctx.strokeStyle = '#7F77DD';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.arc(anchorScreen.x, anchorScreen.y, p.orbitRadius * SCALE, 0, 2 * Math.PI);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    
+    if (p.oscillation > 0) {
+      ctx.strokeStyle = '#CECBF6';
+      ctx.lineWidth = 0.5;
+      ctx.setLineDash([2, 4]);
+      ctx.beginPath();
+      ctx.arc(anchorScreen.x, anchorScreen.y, (p.orbitRadius + p.oscillation) * SCALE, 0, 2 * Math.PI);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(anchorScreen.x, anchorScreen.y, Math.max(0, p.orbitRadius - p.oscillation) * SCALE, 0, 2 * Math.PI);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    
+    // 궤적
+    if (showTrail) {
+      for (let i = 0; i < p.orbCount; i++) {
+        const trail = trails[i] || [];
+        if (trail.length < 2) continue;
+        ctx.strokeStyle = 'rgba(127, 119, 221, 0.3)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        const start = worldToScreen(trail[0].x + trail[0].ax, trail[0].z + trail[0].az);
+        ctx.moveTo(start.x, start.y);
+        for (let j = 1; j < trail.length; j++) {
+          const pt = worldToScreen(trail[j].x + trail[j].ax, trail[j].z + trail[j].az);
+          ctx.lineTo(pt.x, pt.y);
+        }
+        ctx.stroke();
+      }
+    }
+    
+    // 앵커
+    ctx.fillStyle = '#534AB7';
+    ctx.beginPath();
+    ctx.arc(anchorScreen.x, anchorScreen.y, 10, 0, 2 * Math.PI);
+    ctx.fill();
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = '500 11px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('C', anchorScreen.x, anchorScreen.y);
+    
+    let firstPos = null;
+    for (let i = 0; i < p.orbCount; i++) {
+      const pos = calcOrbPosition(i, elapsedTime, p);
+      const worldX = pos.x + anchor.x;
+      const worldZ = pos.z + anchor.z;
+      const screen = worldToScreen(worldX, worldZ);
+      
+      if (!trails[i]) trails[i] = [];
+      trails[i].push({ x: pos.x, z: pos.z, ax: anchor.x, az: anchor.z });
+      if (trails[i].length > MAX_TRAIL) trails[i].shift();
+      
+      ctx.strokeStyle = '#5DCAA5';
+      ctx.lineWidth = 0.5;
+      ctx.beginPath();
+      ctx.arc(screen.x, screen.y, p.orbRadius * SCALE, 0, 2 * Math.PI);
+      ctx.stroke();
+      
+      ctx.fillStyle = '#1D9E75';
+      ctx.beginPath();
+      ctx.arc(screen.x, screen.y, 8, 0, 2 * Math.PI);
+      ctx.fill();
+      
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = '500 10px sans-serif';
+      ctx.fillText(i, screen.x, screen.y);
+      
+      if (i === 0) {
+        firstPos = pos;
+        ctx.strokeStyle = '#D85A30';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([2, 3]);
+        ctx.beginPath();
+        ctx.moveTo(anchorScreen.x, anchorScreen.y);
+        ctx.lineTo(screen.x, screen.y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+    }
+    
+    ctx.fillStyle = '#666';
+    ctx.font = '11px sans-serif';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText('격자 1칸 = 1m', 8, 8);
+    
+    document.getElementById('g_elapsedTime').textContent = elapsedTime.toFixed(2) + 's';
+    document.getElementById('g_orbGap').textContent = (360 / p.orbCount).toFixed(1) + '°';
+    
+    if (firstPos) {
+      document.getElementById('g_curRadius').textContent = firstPos.radius.toFixed(2) + 'm';
+      const angVelRad = Math.abs(p.rotateSpeed) * Math.PI / 180;
+      const linVel = angVelRad * firstPos.radius;
+      document.getElementById('g_orbVelocity').textContent = linVel.toFixed(2) + 'm/s';
+      
+      document.getElementById('g_debugBase').textContent = firstPos.baseAngle.toFixed(1) + '°';
+      document.getElementById('g_debugCurrent').textContent = (firstPos.angle % 360).toFixed(1) + '°';
+      document.getElementById('g_debugRadius').textContent = firstPos.radius.toFixed(3);
+      document.getElementById('g_debugX').textContent = (firstPos.x + anchor.x).toFixed(3);
+      document.getElementById('g_debugZ').textContent = (firstPos.z + anchor.z).toFixed(3);
+    }
+  }
+  
+  function animate(timestamp) {
+    if (lastTimestamp === null) lastTimestamp = timestamp;
+    const deltaSec = (timestamp - lastTimestamp) / 1000;
+    lastTimestamp = timestamp;
+    if (isPlaying) elapsedTime += deltaSec;
+    draw();
+    requestAnimationFrame(animate);
+  }
+  
+  bindSlider('g_orbCount', 'g_orbCountVal', '', 0);
+  bindSlider('g_orbitRadius', 'g_orbitRadiusVal', '', 1);
+  bindSlider('g_orbRadius', 'g_orbRadiusVal', '', 1);
+  bindSlider('g_initialAngle', 'g_initialAngleVal', '°', 0);
+  bindSlider('g_rotateSpeed', 'g_rotateSpeedVal', '°/s', 0);
+  bindSlider('g_oscillation', 'g_oscillationVal', '', 1);
+  bindSlider('g_oscSpeed', 'g_oscSpeedVal', '', 1);
+  
+  ['g_orbCount', 'g_orbitRadius', 'g_initialAngle', 'g_rotateSpeed', 'g_oscillation', 'g_oscSpeed'].forEach(id => {
+    document.getElementById(id).addEventListener('input', () => { trails.length = 0; });
+  });
+  document.getElementById('g_direction').addEventListener('change', () => { trails.length = 0; });
+  
+  document.getElementById('g_playBtn').addEventListener('click', () => {
+    isPlaying = !isPlaying;
+    document.getElementById('g_playBtn').textContent = isPlaying ? '⏸ 일시정지' : '▶ 재생';
+  });
+  document.getElementById('g_resetBtn').addEventListener('click', () => {
+    elapsedTime = 0; anchorPhase = 0; trails.length = 0;
+  });
+  document.getElementById('g_trailBtn').addEventListener('click', () => {
+    showTrail = !showTrail;
+    document.getElementById('g_trailBtn').textContent = showTrail ? '━ 궤적 OFF' : '━ 궤적 ON';
+    if (!showTrail) trails.length = 0;
+  });
+  document.getElementById('g_moveBtn').addEventListener('click', () => {
+    anchorMoving = !anchorMoving;
+    document.getElementById('g_moveBtn').textContent = anchorMoving ? '↗ 앵커 정지' : '↗ 앵커 이동';
+    if (!anchorMoving) anchorPhase = 0;
+    trails.length = 0;
+  });
+  
+  requestAnimationFrame(animate);
+})();
+
+// ==================================================
+// 시뮬레이터 2: 발사체 곡선
+// ==================================================
+(function() {
+  const canvas = document.getElementById('c_canvas');
+  const ctx = canvas.getContext('2d');
+  const SCALE = 35;
+  let currentCurve = 'Sine';
+  let projectiles = [];
+  let savedTrails = [];
+  let autoFire = false;
+  let autoFireTimer = 0;
+  let lastTimestamp = null;
+  let targetMoving = false;
+  let targetPhase = 0;
+  let target = { x: 6, z: 0 };
+  const caster = { x: -6, z: 0 };
+  
+  function worldToScreen(wx, wz) {
+    return { x: canvas.width / 2 + wx * SCALE, y: canvas.height / 2 + wz * SCALE };
+  }
+  function screenToWorld(sx, sy) {
+    return { x: (sx - canvas.width / 2) / SCALE, z: (sy - canvas.height / 2) / SCALE };
+  }
+  function getDirectionVector(dir, baseX, baseZ) {
+    if (dir === 'Right') return { x: -baseZ, z: baseX };
+    if (dir === 'Left') return { x: baseZ, z: -baseX };
+    if (dir === 'Up') return { x: 0, z: -1 };
+    if (dir === 'Down') return { x: 0, z: 1 };
+    return { x: -baseZ, z: baseX };
+  }
+  
+  function fireProjectile(targetOverride) {
+    const speed = parseFloat(document.getElementById('c_speed').value);
+    const amp = parseFloat(document.getElementById('c_amplitude').value);
+    const freq = parseFloat(document.getElementById('c_frequency').value);
+    const phase = parseFloat(document.getElementById('c_phase').value);
+    const dir = document.getElementById('c_direction').value;
+    const lifetime = parseFloat(document.getElementById('c_lifeTime').value);
+    const turnSpeed = parseFloat(document.getElementById('c_turnSpeed').value);
+    const maxAngle = parseFloat(document.getElementById('c_maxAngle').value);
+    
+    const tgt = targetOverride || target;
+    const dx = tgt.x - caster.x;
+    const dz = tgt.z - caster.z;
+    const dist = Math.sqrt(dx*dx + dz*dz);
+    const baseDir = { x: dx/dist, z: dz/dist };
+    
+    const proj = {
+      startX: caster.x, startZ: caster.z,
+      x: caster.x, z: caster.z,
+      baseDir: baseDir, currentDir: { ...baseDir },
+      target: { ...tgt },
+      speed, amplitude: amp, frequency: freq, phase, direction: dir,
+      lifetime, elapsedTime: 0,
+      curve: currentCurve, trail: [],
+      turnSpeed, maxAngle,
+      totalDist: dist,
+      bezierP0: { x: caster.x, z: caster.z },
+      bezierP2: { x: tgt.x, z: tgt.z },
+    };
+    
+    const mid = { x: (proj.bezierP0.x + proj.bezierP2.x) / 2, z: (proj.bezierP0.z + proj.bezierP2.z) / 2 };
+    const perp = getDirectionVector(dir, baseDir.x, baseDir.z);
+    proj.bezierP1 = { x: mid.x + perp.x * amp, z: mid.z + perp.z * amp };
+    
+    projectiles.push(proj);
+  }
+  
+  function updateProjectile(p, dt) {
+    p.elapsedTime += dt;
+    if (p.elapsedTime > p.lifetime) {
+      if (p.trail.length > 2) {
+        savedTrails.push({ trail: [...p.trail], curve: p.curve });
+        if (savedTrails.length > 5) savedTrails.shift();
+      }
+      p.dead = true;
+      return;
+    }
+    const t = p.elapsedTime;
+    
+    if (p.curve === 'Sine') {
+      const fwdX = p.startX + p.baseDir.x * p.speed * t;
+      const fwdZ = p.startZ + p.baseDir.z * p.speed * t;
+      const phaseRad = p.phase * Math.PI / 180;
+      const offset = Math.sin(2 * Math.PI * p.frequency * t + phaseRad) * p.amplitude;
+      const perp = getDirectionVector(p.direction, p.baseDir.x, p.baseDir.z);
+      p.x = fwdX + perp.x * offset;
+      p.z = fwdZ + perp.z * offset;
+    }
+    else if (p.curve === 'Bezier') {
+      let progress = (t * p.speed) / p.totalDist;
+      if (progress > 1.5) {
+        p.dead = true;
+        savedTrails.push({ trail: [...p.trail], curve: p.curve });
+        if (savedTrails.length > 5) savedTrails.shift();
+        return;
+      }
+      progress = Math.min(progress, 1.5);
+      const u = 1 - progress;
+      const u2 = u * u;
+      const t2 = progress * progress;
+      const ut2 = 2 * u * progress;
+      p.x = u2 * p.bezierP0.x + ut2 * p.bezierP1.x + t2 * p.bezierP2.x;
+      p.z = u2 * p.bezierP0.z + ut2 * p.bezierP1.z + t2 * p.bezierP2.z;
+    }
+    else if (p.curve === 'Spiral') {
+      const fwdX = p.startX + p.baseDir.x * p.speed * t;
+      const fwdZ = p.startZ + p.baseDir.z * p.speed * t;
+      const angle = 2 * Math.PI * p.frequency * t + (p.phase * Math.PI / 180);
+      const perp = getDirectionVector(p.direction, p.baseDir.x, p.baseDir.z);
+      const offsetA = Math.cos(angle) * p.amplitude;
+      const offsetB = Math.sin(angle) * p.amplitude;
+      p.x = fwdX + perp.x * offsetA;
+      p.z = fwdZ + perp.z * offsetA;
+      p.depthFactor = (offsetB / p.amplitude + 1) / 2;
+    }
+    else if (p.curve === 'Homing') {
+      const dx = p.target.x - p.x;
+      const dz = p.target.z - p.z;
+      const dist = Math.sqrt(dx*dx + dz*dz);
+      if (dist < 0.3) {
+        p.dead = true;
+        savedTrails.push({ trail: [...p.trail], curve: p.curve });
+        if (savedTrails.length > 5) savedTrails.shift();
+        return;
+      }
+      const desiredDir = { x: dx/dist, z: dz/dist };
+      const dot = p.currentDir.x * desiredDir.x + p.currentDir.z * desiredDir.z;
+      const cross = p.currentDir.x * desiredDir.z - p.currentDir.z * desiredDir.x;
+      const angleDiff = Math.atan2(cross, dot);
+      const maxTurnRad = p.turnSpeed * Math.PI / 180 * dt;
+      const actualTurn = Math.sign(angleDiff) * Math.min(Math.abs(angleDiff), maxTurnRad);
+      const maxAngleRad = p.maxAngle * Math.PI / 180;
+      const cos = Math.cos(actualTurn);
+      const sin = Math.sin(actualTurn);
+      const newDir = {
+        x: p.currentDir.x * cos - p.currentDir.z * sin,
+        z: p.currentDir.x * sin + p.currentDir.z * cos
+      };
+      const newDot = newDir.x * p.baseDir.x + newDir.z * p.baseDir.z;
+      const newCross = newDir.x * p.baseDir.z - newDir.z * p.baseDir.x;
+      const newAngleFromBase = Math.atan2(newCross, newDot);
+      if (Math.abs(newAngleFromBase) <= maxAngleRad) {
+        p.currentDir = newDir;
+      }
+      p.x += p.currentDir.x * p.speed * dt;
+      p.z += p.currentDir.z * p.speed * dt;
+    }
+    else if (p.curve === 'Zigzag') {
+      const fwdX = p.startX + p.baseDir.x * p.speed * t;
+      const fwdZ = p.startZ + p.baseDir.z * p.speed * t;
+      const cycleT = t * p.frequency + (p.phase / 360);
+      const phaseInCycle = cycleT - Math.floor(cycleT);
+      let triangle;
+      if (phaseInCycle < 0.25) triangle = phaseInCycle * 4;
+      else if (phaseInCycle < 0.75) triangle = 2 - phaseInCycle * 4;
+      else triangle = phaseInCycle * 4 - 4;
+      const offset = triangle * p.amplitude;
+      const perp = getDirectionVector(p.direction, p.baseDir.x, p.baseDir.z);
+      p.x = fwdX + perp.x * offset;
+      p.z = fwdZ + perp.z * offset;
+    }
+    
+    p.trail.push({ x: p.x, z: p.z, t: t });
+    if (p.trail.length > 200) p.trail.shift();
+  }
+  
+  function getCurveColor(curve) {
+    switch(curve) {
+      case 'Sine': return '29, 158, 117';
+      case 'Bezier': return '127, 119, 221';
+      case 'Spiral': return '186, 117, 23';
+      case 'Homing': return '226, 75, 74';
+      case 'Zigzag': return '55, 138, 221';
+      default: return '95, 94, 90';
+    }
+  }
+  
+  function draw() {
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    ctx.strokeStyle = 'rgba(0,0,0,0.06)';
+    ctx.lineWidth = 0.5;
+    const cx = canvas.width / 2;
+    const cy = canvas.height / 2;
+    for (let i = -12; i <= 12; i++) {
+      const px = cx + i * SCALE;
+      const py = cy + i * SCALE;
+      ctx.beginPath();
+      ctx.moveTo(px, 0); ctx.lineTo(px, canvas.height); ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(0, py); ctx.lineTo(canvas.width, py); ctx.stroke();
+    }
+    ctx.strokeStyle = 'rgba(0,0,0,0.15)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, cy); ctx.lineTo(canvas.width, cy); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(cx, 0); ctx.lineTo(cx, canvas.height); ctx.stroke();
+    
+    const cs = worldToScreen(caster.x, caster.z);
+    ctx.fillStyle = '#534AB7';
+    ctx.beginPath();
+    ctx.arc(cs.x, cs.y, 12, 0, 2*Math.PI);
+    ctx.fill();
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = '500 12px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('C', cs.x, cs.y);
+    
+    if (targetMoving) {
+      targetPhase += 0.01;
+      target.x = 6 + Math.cos(targetPhase) * 1.5;
+      target.z = Math.sin(targetPhase * 1.3) * 2.5;
+    }
+    const ts = worldToScreen(target.x, target.z);
+    ctx.strokeStyle = '#D85A30';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(ts.x, ts.y, 14, 0, 2*Math.PI);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(ts.x - 18, ts.y); ctx.lineTo(ts.x + 18, ts.y);
+    ctx.moveTo(ts.x, ts.y - 18); ctx.lineTo(ts.x, ts.y + 18);
+    ctx.stroke();
+    ctx.fillStyle = '#D85A30';
+    ctx.beginPath();
+    ctx.arc(ts.x, ts.y, 4, 0, 2*Math.PI);
+    ctx.fill();
+    
+    savedTrails.forEach((saved, idx) => {
+      const alpha = 0.15 + (idx / savedTrails.length) * 0.15;
+      const color = getCurveColor(saved.curve);
+      ctx.strokeStyle = 'rgba(' + color + ',' + alpha + ')';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      if (saved.trail.length > 0) {
+        const start = worldToScreen(saved.trail[0].x, saved.trail[0].z);
+        ctx.moveTo(start.x, start.y);
+        for (let i = 1; i < saved.trail.length; i++) {
+          const pt = worldToScreen(saved.trail[i].x, saved.trail[i].z);
+          ctx.lineTo(pt.x, pt.y);
+        }
+      }
+      ctx.stroke();
+    });
+    
+    for (const p of projectiles) {
+      if (p.dead) continue;
+      if (p.trail.length > 1) {
+        const color = getCurveColor(p.curve);
+        ctx.strokeStyle = 'rgba(' + color + ', 0.85)';
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        const start = worldToScreen(p.trail[0].x, p.trail[0].z);
+        ctx.moveTo(start.x, start.y);
+        for (let i = 1; i < p.trail.length; i++) {
+          const pt = worldToScreen(p.trail[i].x, p.trail[i].z);
+          ctx.lineTo(pt.x, pt.y);
+        }
+        ctx.stroke();
+      }
+      const s = worldToScreen(p.x, p.z);
+      const color = getCurveColor(p.curve);
+      let radius = 7;
+      if (p.curve === 'Spiral' && p.depthFactor !== undefined) {
+        radius = 5 + p.depthFactor * 5;
+      }
+      ctx.fillStyle = 'rgb(' + color + ')';
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, radius, 0, 2*Math.PI);
+      ctx.fill();
+      ctx.strokeStyle = '#FFFFFF';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      
+      if (p.curve === 'Bezier') {
+        const p0 = worldToScreen(p.bezierP0.x, p.bezierP0.z);
+        const p1 = worldToScreen(p.bezierP1.x, p.bezierP1.z);
+        const p2 = worldToScreen(p.bezierP2.x, p.bezierP2.z);
+        ctx.strokeStyle = 'rgba(127, 119, 221, 0.4)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 3]);
+        ctx.beginPath();
+        ctx.moveTo(p0.x, p0.y); ctx.lineTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = 'rgba(127, 119, 221, 0.6)';
+        ctx.beginPath();
+        ctx.arc(p1.x, p1.y, 5, 0, 2*Math.PI);
+        ctx.fill();
+      }
+    }
+    
+    ctx.fillStyle = '#666';
+    ctx.font = '11px sans-serif';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText('격자 1칸 = 1m · C=시전자 · ⊕=타겟', 8, 8);
+    ctx.fillText('현재 곡선: ' + currentCurve, 8, 24);
+    
+    const lineEnd = worldToScreen(target.x, target.z);
+    ctx.strokeStyle = 'rgba(83, 74, 183, 0.2)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([6, 6]);
+    ctx.beginPath();
+    ctx.moveTo(cs.x, cs.y);
+    ctx.lineTo(lineEnd.x, lineEnd.y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+  
+  function updateFormulaDisplay() {
+    const formulas = {
+      Sine: { title: 'Sine (사인파 진동)', lines: [
+        'forwardPos = startPos + baseDirection × Speed × t',
+        'offset = sin(2π × Frequency × t + Phase) × Amplitude',
+        'finalPos = forwardPos + perpDirection × offset'
+      ]},
+      Bezier: { title: 'Bezier (베지에 곡선)', lines: [
+        'P0 = 시전자, P2 = 타겟',
+        'P1 = (P0+P2)/2 + perpDirection × Amplitude',
+        'progress = t × Speed / 총거리',
+        'finalPos = (1-p)²P0 + 2(1-p)pP1 + p²P2'
+      ]},
+      Spiral: { title: 'Spiral (나선 회전 / 2D 투영)', lines: [
+        'forwardPos = startPos + baseDirection × Speed × t',
+        'angle = 2π × Frequency × t + Phase',
+        'offsetA = cos(angle) × Amplitude (perpA축)',
+        'offsetB = sin(angle) × Amplitude (depth축, 크기로 표현)',
+        'finalPos = forwardPos + perpA × offsetA'
+      ]},
+      Homing: { title: 'Homing_Curve (부드러운 추적)', lines: [
+        'desiredDir = (target - position).normalized',
+        'angleDiff = angle(currentDir, desiredDir)',
+        'maxTurn = TurnSpeed × deltaTime',
+        'actualTurn = min(angleDiff, maxTurn)',
+        '※ MaxAngle 초과 시 회전 제한'
+      ]},
+      Zigzag: { title: 'Zigzag (지그재그)', lines: [
+        'forwardPos = startPos + baseDirection × Speed × t',
+        'phase = t × Frequency + Phase/360',
+        'triangle = triangleWave(phase)',
+        'offset = triangle × Amplitude',
+        'finalPos = forwardPos + perpDirection × offset'
+      ]}
+    };
+    const f = formulas[currentCurve];
+    let html = '<div class="formula-title">현재 공식 (' + f.title + ')</div>';
+    f.lines.forEach(line => { html += '<div>' + line + '</div>'; });
+    document.getElementById('c_formulaPanel').innerHTML = html;
+  }
+  
+  function updateParamVisibility() {
+    const homingOnly = currentCurve === 'Homing';
+    const noFreq = currentCurve === 'Bezier' || currentCurve === 'Homing';
+    const noPhase = currentCurve === 'Bezier' || currentCurve === 'Homing';
+    document.getElementById('c_homingPanel').style.display = homingOnly ? 'block' : 'none';
+    document.getElementById('c_frequency').parentElement.style.opacity = noFreq ? '0.4' : '1';
+    document.getElementById('c_frequency').disabled = noFreq;
+    document.getElementById('c_phase').parentElement.style.opacity = noPhase ? '0.4' : '1';
+    document.getElementById('c_phase').disabled = noPhase;
+    document.getElementById('c_amplitude').parentElement.style.opacity = homingOnly ? '0.4' : '1';
+    document.getElementById('c_amplitude').disabled = homingOnly;
+    document.getElementById('c_direction').parentElement.style.opacity = homingOnly ? '0.4' : '1';
+    document.getElementById('c_direction').disabled = homingOnly;
+  }
+  
+  function animate(timestamp) {
+    if (lastTimestamp === null) lastTimestamp = timestamp;
+    const dt = Math.min((timestamp - lastTimestamp) / 1000, 0.05);
+    lastTimestamp = timestamp;
+    for (const p of projectiles) {
+      if (!p.dead) updateProjectile(p, dt);
+    }
+    projectiles = projectiles.filter(p => !p.dead);
+    if (autoFire) {
+      autoFireTimer += dt;
+      if (autoFireTimer > 0.8) { fireProjectile(); autoFireTimer = 0; }
+    }
+    draw();
+    requestAnimationFrame(animate);
+  }
+  
+  bindSlider('c_speed', 'c_speedVal', '', 1);
+  bindSlider('c_amplitude', 'c_amplitudeVal', '', 1);
+  bindSlider('c_frequency', 'c_frequencyVal', '', 1);
+  bindSlider('c_phase', 'c_phaseVal', '°', 0);
+  bindSlider('c_lifeTime', 'c_lifeTimeVal', '', 1);
+  bindSlider('c_turnSpeed', 'c_turnSpeedVal', '', 0);
+  bindSlider('c_maxAngle', 'c_maxAngleVal', '°', 0);
+  
+  document.querySelectorAll('.curve-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.curve-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentCurve = btn.dataset.curve;
+      updateFormulaDisplay();
+      updateParamVisibility();
+    });
+  });
+  
+  document.getElementById('c_fireBtn').addEventListener('click', () => fireProjectile());
+  document.getElementById('c_autoFireBtn').addEventListener('click', () => {
+    autoFire = !autoFire;
+    document.getElementById('c_autoFireText').textContent = autoFire ? '자동 정지' : '자동 발사';
+  });
+  document.getElementById('c_clearBtn').addEventListener('click', () => {
+    projectiles = []; savedTrails = [];
+  });
+  document.getElementById('c_moveTargetBtn').addEventListener('click', () => {
+    targetMoving = !targetMoving;
+    document.getElementById('c_moveTargetText').textContent = targetMoving ? '타겟 정지' : '타겟 이동';
+    if (!targetMoving) { target.x = 6; target.z = 0; }
+  });
+  canvas.addEventListener('click', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const sx = (e.clientX - rect.left) * (canvas.width / rect.width);
+    const sy = (e.clientY - rect.top) * (canvas.height / rect.height);
+    const world = screenToWorld(sx, sy);
+    target.x = world.x; target.z = world.z;
+    fireProjectile();
+  });
+  
+  updateFormulaDisplay();
+  updateParamVisibility();
+  requestAnimationFrame(animate);
+})();
+
+// ==================================================
+// 시뮬레이터: 체인 라이트닝
+// ==================================================
+(function() {
+  const canvas = document.getElementById('ch_canvas');
+  const ctx = canvas.getContext('2d');
+  const SCALE = 35;
+  let enemies = [], activeChain = null, fadingBeams = [], chainLog = [];
+  let autoCast = false, autoCastTimer = 0, lastTimestamp = null;
+  let stats = { totalHits: 0, totalDamage: 0, castCount: 0, kills: 0 };
+  const caster = { x: -5, z: 0 };
+  function w2s(wx, wz) { return { x: canvas.width/2 + wx*SCALE, y: canvas.height/2 + wz*SCALE }; }
+  function s2w(sx, sy) { return { x: (sx-canvas.width/2)/SCALE, z: (sy-canvas.height/2)/SCALE }; }
+  function spawnEnemies() {
+    const count = parseInt(document.getElementById('ch_enemyCount').value);
+    const layout = document.getElementById('ch_layout').value;
+    enemies = [];
+    if (layout === 'cluster') { const cx=3,cz=0; for(let i=0;i<count;i++){const a=Math.random()*Math.PI*2,r=Math.random()*2.5;enemies.push(mk(cx+Math.cos(a)*r,cz+Math.sin(a)*r));} }
+    else if (layout === 'line') { for(let i=0;i<count;i++){enemies.push(mk(1+(i/count)*7,(Math.random()-0.5)*0.6));} }
+    else if (layout === 'circle') { for(let i=0;i<count;i++){const a=(i/count)*Math.PI*2,r=3.5+(Math.random()-0.5)*0.5;enemies.push(mk(3+Math.cos(a)*r,Math.sin(a)*r));} }
+    else { for(let i=0;i<count;i++){enemies.push(mk(-1+Math.random()*8,-4+Math.random()*8));} }
+  }
+  function mk(x,z){ return {x,z,hp:80+Math.floor(Math.random()*60),maxHp:140,flashTime:0,diedAt:null}; }
+  function revive(){ for(const e of enemies){e.hp=140;e.maxHp=140;e.flashTime=0;e.diedAt=null;} }
+  function moveToFading(){ if(!activeChain)return; const now=activeChain.elapsed; for(const b of activeChain.bounces){if(b.startTime<=now){fadingBeams.push({from:b.from,to:b.to,fadeStartElapsed:0,initialProgress:Math.min(1,(now-b.startTime)/(b.endTime-b.startTime))});}} activeChain=null; }
+  function cast(initialTarget) {
+    if (activeChain) moveToFading();
+    const P = {
+      maxChain: parseInt(document.getElementById('ch_maxChain').value),
+      searchRange: parseFloat(document.getElementById('ch_searchRange').value),
+      bounceDelay: parseFloat(document.getElementById('ch_bounceDelay').value),
+      damageRatio: parseFloat(document.getElementById('ch_damageRatio').value),
+      damageDecay: parseFloat(document.getElementById('ch_damageDecay').value),
+      priority: document.getElementById('ch_priority').value,
+      allowRe: document.getElementById('ch_allowReChain').value === 'true'
+    };
+    let target = initialTarget;
+    if (!target) { const alive=enemies.filter(e=>e.hp>0); if(alive.length===0)return false; target=alive.reduce((a,b)=>((a.x-caster.x)**2+(a.z-caster.z)**2)<((b.x-caster.x)**2+(b.z-caster.z)**2)?a:b); }
+    activeChain = { params:P, bounces:[], hitHistory:new Set(), currentTarget:target, currentIndex:0, elapsed:0, nextEventTime:P.bounceDelay, done:false, currentDamage:P.damageRatio };
+    activeChain.bounces.push({ from:{x:caster.x,z:caster.z,isCaster:true}, to:target, startTime:0, endTime:P.bounceDelay });
+    chainLog = ['[0.00s] 시전자 → 첫 타겟 빔 발사']; stats.castCount++; return true;
+  }
+  function selByPri(c,pri,fx,fz){ if(c.length===0)return null; if(pri==='Random')return c[Math.floor(Math.random()*c.length)]; if(pri==='LowHP')return c.reduce((a,b)=>a.hp<b.hp?a:b); if(pri==='HighHP')return c.reduce((a,b)=>a.hp>b.hp?a:b); let best=c[0],bd=(best.x-fx)**2+(best.z-fz)**2; for(let i=1;i<c.length;i++){const d=(c[i].x-fx)**2+(c[i].z-fz)**2; if(d<bd){best=c[i];bd=d;}} return best; }
+  function updateChain(dt) {
+    if(!activeChain)return;
+    activeChain.elapsed += dt;
+    if(activeChain.elapsed>=activeChain.nextEventTime && !activeChain.done){
+      const t=activeChain.elapsed, target=activeChain.currentTarget, P=activeChain.params;
+      const dmg=Math.round(activeChain.currentDamage*30);
+      target.hp-=dmg; target.flashTime=0.3; stats.totalHits++; stats.totalDamage+=dmg;
+      activeChain.hitHistory.add(target);
+      const phase=activeChain.currentIndex===0?'Initial Hit':'Chain Hit #'+activeChain.currentIndex;
+      chainLog.push('['+t.toFixed(2)+'s] '+phase+' → 데미지 '+dmg+' (배율 '+activeChain.currentDamage.toFixed(2)+'x, 남은 HP '+Math.max(0,target.hp).toFixed(0)+')');
+      if(target.hp<=0 && !target.diedAt){target.diedAt=t;chainLog.push('         ↳ 타겟 처치');}
+      if(activeChain.currentIndex>=P.maxChain){activeChain.done=true;chainLog.push('['+t.toFixed(2)+'s] 체인 종료 (MaxChainCount 도달)');finalize();return;}
+      const allE=enemies.filter(e=>e.hp>0);
+      const cand=P.allowRe?allE.filter(e=>e!==target):allE.filter(e=>!activeChain.hitHistory.has(e));
+      const inR=cand.filter(e=>{const dx=e.x-target.x,dz=e.z-target.z;return Math.sqrt(dx*dx+dz*dz)<=P.searchRange;});
+      if(inR.length===0){activeChain.done=true;chainLog.push('['+t.toFixed(2)+'s] 체인 종료 (탐색 범위 내 타겟 없음)');finalize();return;}
+      const next=selByPri(inR,P.priority,target.x,target.z);
+      activeChain.bounces.push({from:target,to:next,startTime:t,endTime:t+P.bounceDelay});
+      activeChain.currentTarget=next; activeChain.currentIndex++; activeChain.currentDamage*=P.damageDecay; activeChain.nextEventTime=t+P.bounceDelay;
+    }
+  }
+  function finalize(){ if(!activeChain)return; for(const b of activeChain.bounces){fadingBeams.push({from:b.from,to:b.to,fadeStartElapsed:0,initialProgress:1.0});} activeChain=null; }
+  function drawBeam(from,to,progress,alpha,animTime){
+    const fp=w2s(from.x,from.z), tp=w2s(to.x,to.z);
+    const ex=fp.x+(tp.x-fp.x)*progress, ey=fp.y+(tp.y-fp.y)*progress;
+    ctx.strokeStyle='rgba(178,220,251,'+(alpha*0.5)+')'; ctx.lineWidth=8; ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(fp.x,fp.y); ctx.lineTo(ex,ey); ctx.stroke();
+    ctx.strokeStyle='rgba(55,138,221,'+alpha+')'; ctx.lineWidth=3;
+    ctx.beginPath(); ctx.moveTo(fp.x,fp.y);
+    const seg=8;
+    for(let s=1;s<=seg;s++){const p=s/seg,px=fp.x+(ex-fp.x)*p,py=fp.y+(ey-fp.y)*p,dx=ex-fp.x,dy=ey-fp.y,len=Math.sqrt(dx*dx+dy*dy);if(len>0){const amp=4*Math.sin(p*Math.PI),nz=(Math.sin(animTime*30+s*7)+Math.sin(animTime*50+s*3)*0.5)*amp;ctx.lineTo(px+(-dy/len)*nz,py+(dx/len)*nz);}else ctx.lineTo(px,py);}
+    ctx.stroke();
+    ctx.strokeStyle='rgba(255,255,255,'+(alpha*0.9)+')'; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(fp.x,fp.y); ctx.lineTo(ex,ey); ctx.stroke();
+  }
+  function draw(dt) {
+    ctx.fillStyle='#fff'; ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.strokeStyle='rgba(0,0,0,0.06)'; ctx.lineWidth=0.5;
+    const cx=canvas.width/2,cy=canvas.height/2;
+    for(let i=-12;i<=12;i++){ctx.beginPath();ctx.moveTo(cx+i*SCALE,0);ctx.lineTo(cx+i*SCALE,canvas.height);ctx.stroke();ctx.beginPath();ctx.moveTo(0,cy+i*SCALE);ctx.lineTo(canvas.width,cy+i*SCALE);ctx.stroke();}
+    ctx.strokeStyle='rgba(0,0,0,0.15)'; ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(0,cy);ctx.lineTo(canvas.width,cy);ctx.stroke();ctx.beginPath();ctx.moveTo(cx,0);ctx.lineTo(cx,canvas.height);ctx.stroke();
+    for(const e of enemies){const s=w2s(e.x,e.z);
+      if(e.hp<=0){ctx.fillStyle='rgba(180,178,169,0.35)';ctx.beginPath();ctx.arc(s.x,s.y,9,0,2*Math.PI);ctx.fill();ctx.strokeStyle='rgba(120,120,120,0.5)';ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(s.x-5,s.y-5);ctx.lineTo(s.x+5,s.y+5);ctx.moveTo(s.x+5,s.y-5);ctx.lineTo(s.x-5,s.y+5);ctx.stroke();continue;}
+      if(e.flashTime>0){ctx.fillStyle='rgba(55,138,221,0.3)';ctx.beginPath();ctx.arc(s.x,s.y,18,0,2*Math.PI);ctx.fill();}
+      ctx.fillStyle=e.flashTime>0?'#185FA5':'#5F5E5A';ctx.beginPath();ctx.arc(s.x,s.y,9,0,2*Math.PI);ctx.fill();
+      const hp=e.hp/e.maxHp;ctx.fillStyle='rgba(0,0,0,0.15)';ctx.fillRect(s.x-14,s.y-18,28,3);ctx.fillStyle=hp>0.5?'#1D9E75':(hp>0.25?'#EF9F27':'#E24B4A');ctx.fillRect(s.x-14,s.y-18,28*hp,3);
+    }
+    const cs=w2s(caster.x,caster.z);ctx.fillStyle='#534AB7';ctx.beginPath();ctx.arc(cs.x,cs.y,12,0,2*Math.PI);ctx.fill();ctx.fillStyle='#fff';ctx.font='500 12px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('C',cs.x,cs.y);
+    const fade=0.8;
+    for(let i=fadingBeams.length-1;i>=0;i--){const b=fadingBeams[i];b.fadeStartElapsed+=dt;const a=Math.max(0,1-b.fadeStartElapsed/fade);if(a<=0){fadingBeams.splice(i,1);continue;}drawBeam(b.from,b.to,b.initialProgress,a,0);}
+    if(activeChain){const t=activeChain.elapsed;for(const b of activeChain.bounces){if(b.startTime>t)continue;let pr=t<b.endTime?(t-b.startTime)/(b.endTime-b.startTime):1.0;drawBeam(b.from,b.to,pr,1.0,t);}}
+    ctx.fillStyle='#666';ctx.font='11px sans-serif';ctx.textAlign='left';ctx.textBaseline='top';ctx.fillText('격자 1칸 = 1m · C=시전자',8,8);
+    if(autoCast){ctx.fillStyle='#185FA5';ctx.fillText('● 자동 시전 중',8,24);}
+    stats.kills=enemies.filter(e=>e.hp<=0).length;
+    document.getElementById('ch_totalHits').textContent=stats.totalHits;
+    document.getElementById('ch_totalDamage').textContent=stats.totalDamage;
+    document.getElementById('ch_castCount').textContent=stats.castCount;
+    document.getElementById('ch_killCount').textContent=stats.kills;
+    const le=document.getElementById('ch_log');if(chainLog.length>0){le.innerHTML=chainLog.map(l=>'<div>'+l+'</div>').join('');le.scrollTop=le.scrollHeight;}
+  }
+  function animate(ts){
+    if(lastTimestamp===null)lastTimestamp=ts;const dt=Math.min((ts-lastTimestamp)/1000,0.05);lastTimestamp=ts;
+    for(const e of enemies){if(e.flashTime>0){e.flashTime-=dt;if(e.flashTime<0)e.flashTime=0;}}
+    updateChain(dt);
+    if(autoCast){autoCastTimer+=dt;if(!activeChain&&autoCastTimer>0.6){const alive=enemies.filter(e=>e.hp>0);if(alive.length===0){revive();fadingBeams=[];}if(cast())autoCastTimer=0;}}
+    draw(dt);requestAnimationFrame(animate);
+  }
+  bindSlider('ch_maxChain','ch_maxChainVal','',0);bindSlider('ch_searchRange','ch_searchRangeVal','',1);bindSlider('ch_bounceDelay','ch_bounceDelayVal','',2);
+  bindSlider('ch_damageRatio','ch_damageRatioVal','',1);bindSlider('ch_damageDecay','ch_damageDecayVal','',2);bindSlider('ch_enemyCount','ch_enemyCountVal','',0);
+  document.getElementById('ch_castBtn').addEventListener('click',()=>cast());
+  document.getElementById('ch_autoBtn').addEventListener('click',()=>{autoCast=!autoCast;document.getElementById('ch_autoBtn').textContent=autoCast?'■ 자동 정지':'↻ 자동 시전';if(autoCast)autoCastTimer=0.6;});
+  document.getElementById('ch_resetBtn').addEventListener('click',()=>{revive();activeChain=null;fadingBeams=[];chainLog=[];stats={totalHits:0,totalDamage:0,castCount:0,kills:0};});
+  document.getElementById('ch_newBtn').addEventListener('click',()=>{spawnEnemies();activeChain=null;fadingBeams=[];chainLog=[];stats={totalHits:0,totalDamage:0,castCount:0,kills:0};});
+  document.getElementById('ch_enemyCount').addEventListener('change',()=>spawnEnemies());
+  document.getElementById('ch_layout').addEventListener('change',()=>spawnEnemies());
+  canvas.addEventListener('click',(e)=>{const r=canvas.getBoundingClientRect();const sx=(e.clientX-r.left)*(canvas.width/r.width),sy=(e.clientY-r.top)*(canvas.height/r.height);const wd=s2w(sx,sy);const alive=enemies.filter(en=>en.hp>0);if(alive.length===0)return;let n=alive[0],bd=(n.x-wd.x)**2+(n.z-wd.z)**2;for(let i=1;i<alive.length;i++){const d=(alive[i].x-wd.x)**2+(alive[i].z-wd.z)**2;if(d<bd){n=alive[i];bd=d;}}if(Math.sqrt(bd)<1.5)cast(n);});
+  spawnEnemies();requestAnimationFrame(animate);
+})();
+
+
+// ==================================================
+// 시뮬레이터: 지속형 빔
+// ==================================================
+(function() {
+  const canvas = document.getElementById('bm_canvas');
+  const ctx = canvas.getContext('2d');
+  const SCALE = 32;
+  let enemies=[], beam=null, autoMode=false, autoTimer=0, lastTimestamp=null;
+  let mouseWorld={x:5,z:0}, casterAngle=0, casterAutoPhase=0;
+  let stats={totalTicks:0,totalDamage:0};
+  const caster={x:-5,z:0};
+  const schemes={lightning:{core:'#FFFFFF',main:'#378ADD',glow:'rgba(178,220,251,0.5)',impact:'#185FA5'},laser:{core:'#FFFFFF',main:'#E24B4A',glow:'rgba(247,193,193,0.6)',impact:'#A32D2D'},frost:{core:'#FFFFFF',main:'#5DCAA5',glow:'rgba(159,225,203,0.5)',impact:'#0F6E56'},holy:{core:'#FFFFFF',main:'#EF9F27',glow:'rgba(250,199,117,0.6)',impact:'#854F0B'}};
+  function w2s(wx,wz){return{x:canvas.width/2+wx*SCALE,y:canvas.height/2+wz*SCALE};}
+  function s2w(sx,sy){return{x:(sx-canvas.width/2)/SCALE,z:(sy-canvas.height/2)/SCALE};}
+  function spawnEnemies(){
+    const count=parseInt(document.getElementById('bm_enemyCount').value),layout=document.getElementById('bm_layout').value;
+    enemies=[];
+    if(layout==='circle'){for(let i=0;i<count;i++){const a=(i/count)*Math.PI*2,r=4+(Math.random()-0.5)*0.6;enemies.push(mk(Math.cos(a)*r,Math.sin(a)*r));}}
+    else if(layout==='line'){for(let i=0;i<count;i++){enemies.push(mk(1+(i/count)*7,(Math.random()-0.5)*0.6));}}
+    else if(layout==='cluster'){const cx=3,cz=0;for(let i=0;i<count;i++){const a=Math.random()*Math.PI*2,r=Math.random()*2.5;enemies.push(mk(cx+Math.cos(a)*r,cz+Math.sin(a)*r));}}
+    else{for(let i=0;i<count;i++){const a=Math.random()*Math.PI*2,r=2+Math.random()*4,e=mk(Math.cos(a)*r,Math.sin(a)*r);e.vx=(Math.random()-0.5)*1.5;e.vz=(Math.random()-0.5)*1.5;enemies.push(e);}}
+  }
+  function mk(x,z){return{x,z,hp:80+Math.floor(Math.random()*60),maxHp:140,flashTime:0,vx:0,vz:0};}
+  function revive(){for(const e of enemies){e.hp=140;e.maxHp=140;e.flashTime=0;}}
+  function castBeam(){
+    if(beam)return false;
+    const P={bl:parseFloat(document.getElementById('bm_length').value),bw:parseFloat(document.getElementById('bm_width').value),dur:parseFloat(document.getElementById('bm_duration').value),dmg:parseFloat(document.getElementById('bm_damage').value),tick:parseFloat(document.getElementById('bm_tick').value),maxT:parseInt(document.getElementById('bm_maxTargets').value),aim:document.getElementById('bm_aimMode').value,hit:document.getElementById('bm_hitMode').value,col:document.getElementById('bm_color').value};
+    let lock=null;
+    if(P.aim==='lock'){const alive=enemies.filter(e=>e.hp>0);if(alive.length>0)lock=alive.reduce((a,b)=>((a.x-caster.x)**2+(a.z-caster.z)**2)<((b.x-caster.x)**2+(b.z-caster.z)**2)?a:b);}
+    beam={beamLength:P.bl,beamWidth:P.bw,duration:P.dur,damageRatio:P.dmg,tickInterval:P.tick,maxTargets:P.maxT||Infinity,aimMode:P.aim,hitMode:P.hit,colorScheme:P.col,elapsed:0,nextTickTime:0,tickCount:0,fixedAngle:casterAngle,lockTarget:lock,currentHits:0,actualLength:P.bl};
+    return true;
+  }
+  function getBeamDir(){
+    if(!beam)return{x:Math.cos(casterAngle),z:Math.sin(casterAngle)};
+    if(beam.aimMode==='fixed')return{x:Math.cos(beam.fixedAngle),z:Math.sin(beam.fixedAngle)};
+    if(beam.aimMode==='lock'&&beam.lockTarget&&beam.lockTarget.hp>0){const dx=beam.lockTarget.x-caster.x,dz=beam.lockTarget.z-caster.z,d=Math.sqrt(dx*dx+dz*dz);if(d>0.01)return{x:dx/d,z:dz/d};}
+    return{x:Math.cos(casterAngle),z:Math.sin(casterAngle)};
+  }
+  function checkHit(enemy,bd){
+    const dx=enemy.x-caster.x,dz=enemy.z-caster.z,pd=dx*bd.x+dz*bd.z;
+    if(pd<0||pd>beam.beamLength)return false;
+    const px=bd.x*pd,pz=bd.z*pd,perp=Math.sqrt((dx-px)**2+(dz-pz)**2);
+    return perp<=beam.beamWidth/2;
+  }
+  function updateBeam(dt){
+    if(!beam)return;
+    beam.elapsed+=dt;
+    if(beam.elapsed>=beam.duration){beam=null;return;}
+    const bd=getBeamDir();
+    let hits=[];
+    for(const e of enemies){if(e.hp<=0)continue;if(checkHit(e,bd)){const dx=e.x-caster.x,dz=e.z-caster.z;hits.push({enemy:e,dist:Math.sqrt(dx*dx+dz*dz)});}}
+    hits.sort((a,b)=>a.dist-b.dist);
+    if(beam.hitMode==='block'&&hits.length>0){hits=[hits[0]];beam.actualLength=hits[0].dist;}else beam.actualLength=beam.beamLength;
+    if(hits.length>beam.maxTargets)hits=hits.slice(0,beam.maxTargets);
+    beam.currentHits=hits.length;
+    if(beam.elapsed>=beam.nextTickTime){beam.tickCount++;beam.nextTickTime=beam.tickCount*beam.tickInterval;const dmg=Math.round(beam.damageRatio*30);for(const h of hits){h.enemy.hp-=dmg;h.enemy.flashTime=0.15;stats.totalTicks++;stats.totalDamage+=dmg;}}
+  }
+  function updateCaster(dt){
+    const m=document.getElementById('bm_casterRotate').value;
+    if(m==='manual'){const dx=mouseWorld.x-caster.x,dz=mouseWorld.z-caster.z;casterAngle=Math.atan2(dz,dx);}
+    else if(m==='auto'){casterAutoPhase+=dt*0.8;casterAngle=casterAutoPhase;}
+    else if(m==='aim'){const alive=enemies.filter(e=>e.hp>0);if(alive.length>0){const n=alive.reduce((a,b)=>((a.x-caster.x)**2+(a.z-caster.z)**2)<((b.x-caster.x)**2+(b.z-caster.z)**2)?a:b);const ta=Math.atan2(n.z-caster.z,n.x-caster.x);let diff=ta-casterAngle;while(diff>Math.PI)diff-=Math.PI*2;while(diff<-Math.PI)diff+=Math.PI*2;casterAngle+=diff*Math.min(1,dt*5);}}
+  }
+  function updateEnemies(dt){
+    if(document.getElementById('bm_layout').value==='moving'){for(const e of enemies){if(e.hp<=0)continue;e.x+=e.vx*dt;e.z+=e.vz*dt;if(Math.abs(e.x)>7){e.vx*=-1;e.x=Math.sign(e.x)*7;}if(Math.abs(e.z)>5){e.vz*=-1;e.z=Math.sign(e.z)*5;}}}
+    for(const e of enemies){if(e.flashTime>0){e.flashTime-=dt;if(e.flashTime<0)e.flashTime=0;}}
+  }
+  function draw(){
+    ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.strokeStyle='rgba(0,0,0,0.06)';ctx.lineWidth=0.5;const cx=canvas.width/2,cy=canvas.height/2;
+    for(let i=-12;i<=12;i++){ctx.beginPath();ctx.moveTo(cx+i*SCALE,0);ctx.lineTo(cx+i*SCALE,canvas.height);ctx.stroke();ctx.beginPath();ctx.moveTo(0,cy+i*SCALE);ctx.lineTo(canvas.width,cy+i*SCALE);ctx.stroke();}
+    ctx.strokeStyle='rgba(0,0,0,0.15)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(0,cy);ctx.lineTo(canvas.width,cy);ctx.stroke();ctx.beginPath();ctx.moveTo(cx,0);ctx.lineTo(cx,canvas.height);ctx.stroke();
+    for(const e of enemies){const s=w2s(e.x,e.z);if(e.hp<=0){ctx.fillStyle='rgba(180,178,169,0.35)';ctx.beginPath();ctx.arc(s.x,s.y,9,0,2*Math.PI);ctx.fill();continue;}if(e.flashTime>0){ctx.fillStyle='rgba(55,138,221,0.3)';ctx.beginPath();ctx.arc(s.x,s.y,16,0,2*Math.PI);ctx.fill();}ctx.fillStyle=e.flashTime>0?'#185FA5':'#5F5E5A';ctx.beginPath();ctx.arc(s.x,s.y,9,0,2*Math.PI);ctx.fill();const hp=e.hp/e.maxHp;ctx.fillStyle='rgba(0,0,0,0.15)';ctx.fillRect(s.x-14,s.y-18,28,3);ctx.fillStyle=hp>0.5?'#1D9E75':(hp>0.25?'#EF9F27':'#E24B4A');ctx.fillRect(s.x-14,s.y-18,28*hp,3);}
+    const cs=w2s(caster.x,caster.z);
+    if(!beam){const ge=w2s(caster.x+Math.cos(casterAngle)*2,caster.z+Math.sin(casterAngle)*2);ctx.strokeStyle='rgba(83,74,183,0.4)';ctx.lineWidth=1.5;ctx.setLineDash([4,4]);ctx.beginPath();ctx.moveTo(cs.x,cs.y);ctx.lineTo(ge.x,ge.y);ctx.stroke();ctx.setLineDash([]);}
+    if(beam){const bd=getBeamDir(),sc=schemes[beam.colorScheme],al=beam.actualLength||beam.beamLength;const ss=cs,ew=w2s(caster.x+bd.x*al,caster.z+bd.z*al);const bdx=ew.x-ss.x,bdy=ew.y-ss.y,bl=Math.sqrt(bdx*bdx+bdy*bdy);if(bl>0){const hw=(beam.beamWidth/2)*SCALE,pdx=-bdy/bl,pdy=bdx/bl;
+      ctx.fillStyle=sc.glow;ctx.beginPath();ctx.moveTo(ss.x+pdx*hw*1.8,ss.y+pdy*hw*1.8);ctx.lineTo(ew.x+pdx*hw*1.8,ew.y+pdy*hw*1.8);ctx.lineTo(ew.x-pdx*hw*1.8,ew.y-pdy*hw*1.8);ctx.lineTo(ss.x-pdx*hw*1.8,ss.y-pdy*hw*1.8);ctx.closePath();ctx.fill();
+      ctx.fillStyle=sc.main;ctx.beginPath();ctx.moveTo(ss.x+pdx*hw,ss.y+pdy*hw);ctx.lineTo(ew.x+pdx*hw,ew.y+pdy*hw);ctx.lineTo(ew.x-pdx*hw,ew.y-pdy*hw);ctx.lineTo(ss.x-pdx*hw,ss.y-pdy*hw);ctx.closePath();ctx.fill();
+      if(beam.colorScheme==='lightning'){ctx.strokeStyle=sc.core;ctx.lineWidth=2;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(ss.x,ss.y);const seg=Math.max(6,Math.floor(bl/40));for(let s=1;s<seg;s++){const p=s/seg,bx=ss.x+bdx*p,by=ss.y+bdy*p,amp=hw*0.5*Math.sin(p*Math.PI),nz=(Math.sin(beam.elapsed*30+s*7)+Math.sin(beam.elapsed*50+s*3)*0.5)*amp;ctx.lineTo(bx+pdx*nz,by+pdy*nz);}ctx.lineTo(ew.x,ew.y);ctx.stroke();}
+      ctx.strokeStyle=sc.core;ctx.lineWidth=2;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(ss.x,ss.y);ctx.lineTo(ew.x,ew.y);ctx.stroke();
+      const pr=hw*(1.2+Math.sin(beam.elapsed*15)*0.3);ctx.fillStyle=sc.impact+'CC';ctx.beginPath();ctx.arc(ew.x,ew.y,pr,0,2*Math.PI);ctx.fill();ctx.fillStyle=sc.core;ctx.beginPath();ctx.arc(ew.x,ew.y,pr*0.4,0,2*Math.PI);ctx.fill();
+      const cp=hw*(1.5+Math.sin(beam.elapsed*20)*0.4);ctx.fillStyle=sc.impact+'AA';ctx.beginPath();ctx.arc(ss.x,ss.y,cp,0,2*Math.PI);ctx.fill();
+    }}
+    ctx.fillStyle='#534AB7';ctx.beginPath();ctx.arc(cs.x,cs.y,12,0,2*Math.PI);ctx.fill();ctx.fillStyle='#fff';ctx.font='500 12px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('C',cs.x,cs.y);
+    ctx.fillStyle='#666';ctx.font='11px sans-serif';ctx.textAlign='left';ctx.textBaseline='top';ctx.fillText('격자 1칸 = 1m · C=시전자',8,8);
+    if(beam){ctx.fillStyle='#185FA5';ctx.fillText('● 시전 중 · '+beam.aimMode+' 모드',8,24);}else ctx.fillText('대기 중 · 마우스로 조준',8,24);
+    if(beam){document.getElementById('bm_status').textContent='시전 중';document.getElementById('bm_remain').textContent=Math.max(0,beam.duration-beam.elapsed).toFixed(1)+'s';document.getElementById('bm_curHit').textContent=beam.currentHits+'명';}
+    else{document.getElementById('bm_status').textContent='대기';document.getElementById('bm_remain').textContent='-';document.getElementById('bm_curHit').textContent='0명';}
+    document.getElementById('bm_ticks').textContent=stats.totalTicks;document.getElementById('bm_totalDmg').textContent=stats.totalDamage;
+  }
+  function animate(ts){
+    if(lastTimestamp===null)lastTimestamp=ts;const dt=Math.min((ts-lastTimestamp)/1000,0.05);lastTimestamp=ts;
+    updateCaster(dt);updateEnemies(dt);updateBeam(dt);
+    if(autoMode&&!beam){autoTimer+=dt;if(autoTimer>0.4){if(enemies.filter(e=>e.hp>0).length===0)revive();castBeam();autoTimer=0;}}
+    draw();requestAnimationFrame(animate);
+  }
+  function bindBeamSlider(id,valId,suffix,dec){const sl=document.getElementById(id),vs=document.getElementById(valId);const up=()=>{const v=parseFloat(sl.value);let d=(dec!==undefined?v.toFixed(dec):v)+(suffix||'');if(id==='bm_maxTargets'&&v===0)d='∞';vs.textContent=d;};sl.addEventListener('input',up);up();}
+  bindBeamSlider('bm_length','bm_lengthVal','',1);bindBeamSlider('bm_width','bm_widthVal','',1);bindBeamSlider('bm_duration','bm_durationVal','',1);
+  bindBeamSlider('bm_damage','bm_damageVal','',1);bindBeamSlider('bm_tick','bm_tickVal','',2);bindBeamSlider('bm_maxTargets','bm_maxTargetsVal','',0);bindBeamSlider('bm_enemyCount','bm_enemyCountVal','',0);
+  document.getElementById('bm_castBtn').addEventListener('click',()=>castBeam());
+  document.getElementById('bm_autoBtn').addEventListener('click',()=>{autoMode=!autoMode;document.getElementById('bm_autoBtn').textContent=autoMode?'■ 자동 정지':'↻ 자동 시전';if(autoMode)autoTimer=0.4;});
+  document.getElementById('bm_resetBtn').addEventListener('click',()=>{revive();beam=null;stats={totalTicks:0,totalDamage:0};});
+  document.getElementById('bm_newBtn').addEventListener('click',()=>{spawnEnemies();beam=null;stats={totalTicks:0,totalDamage:0};});
+  document.getElementById('bm_enemyCount').addEventListener('change',()=>spawnEnemies());
+  document.getElementById('bm_layout').addEventListener('change',()=>spawnEnemies());
+  canvas.addEventListener('mousemove',(e)=>{const r=canvas.getBoundingClientRect();mouseWorld=s2w((e.clientX-r.left)*(canvas.width/r.width),(e.clientY-r.top)*(canvas.height/r.height));});
+  canvas.addEventListener('click',()=>castBeam());
+  spawnEnemies();requestAnimationFrame(animate);
+})();
+
+</script>
+</body>
+</html>
