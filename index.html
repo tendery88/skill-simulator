@@ -271,9 +271,10 @@
   
   <!-- ========== 발사체 곡선 ========== -->
   <div id="sim-curve" class="sim-view">
-    <div class="grid-3" style="margin-bottom: 14px;">
+    <div class="grid-4" style="margin-bottom: 14px;">
       <button class="curve-btn active" data-curve="Sine">∿ Sine</button>
       <button class="curve-btn" data-curve="Bezier">⌒ Bezier</button>
+      <button class="curve-btn" data-curve="CubicBezier">∽ Cubic</button>
       <button class="curve-btn" data-curve="Zigzag">⩘ Zigzag</button>
     </div>
     
@@ -329,6 +330,37 @@
             <label class="panel-label">MaxAngle (°)</label>
             <input type="range" id="c_maxAngle" min="30" max="180" value="150" step="10">
             <span class="val-display" id="c_maxAngleVal">150°</span>
+          </div>
+        </div>
+      </div>
+      <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #d0d0c8;">
+        <div style="font-size: 12px; font-weight: 500; color: #1D9E75; margin-bottom: 8px;">분열 설정 (SpawnCount / AngleRange)</div>
+        <div class="grid-2">
+          <div>
+            <div class="panel-row">
+              <label class="panel-label">SpawnCount</label>
+              <input type="range" id="c_spawnCount" min="1" max="20" value="1" step="1">
+              <span class="val-display" id="c_spawnCountVal">1</span>
+            </div>
+            <div class="panel-row">
+              <label class="panel-label">AngleRange (°)</label>
+              <input type="range" id="c_angleRange" min="0" max="360" value="60" step="5">
+              <span class="val-display" id="c_angleRangeVal">60°</span>
+            </div>
+          </div>
+          <div>
+            <div class="panel-row">
+              <label class="panel-label">시작 각도 (°)</label>
+              <input type="range" id="c_startAngle" min="-180" max="180" value="0" step="5">
+              <span class="val-display" id="c_startAngleVal">0°</span>
+            </div>
+            <div class="panel-row">
+              <label class="panel-label">PhaseSpread</label>
+              <select id="c_phaseSpread">
+                <option value="same">동일</option>
+                <option value="spread">분산</option>
+              </select>
+            </div>
           </div>
         </div>
       </div>
@@ -737,20 +769,45 @@ function bindSlider(id, valId, suffix, decimals) {
   }
   
   function fireProjectile(targetOverride) {
+    const tgt = targetOverride || target;
+    const dx = tgt.x - caster.x;
+    const dz = tgt.z - caster.z;
+    const dist0 = Math.sqrt(dx*dx + dz*dz);
+    if (dist0 < 0.01) return;
+    const aimDir = { x: dx/dist0, z: dz/dist0 };
+    const aimAngle = Math.atan2(aimDir.z, aimDir.x);
+    
+    // 분열 파라미터
+    const spawnCount = parseInt(document.getElementById('c_spawnCount').value);
+    const angleRange = parseFloat(document.getElementById('c_angleRange').value) * Math.PI/180;
+    const startAngle = parseFloat(document.getElementById('c_startAngle').value) * Math.PI/180;
+    const phaseSpread = document.getElementById('c_phaseSpread').value;
+    const baseAngle = aimAngle + startAngle;
+    const isFull = Math.abs(angleRange - 2*Math.PI) < 0.01;
+    
+    for (let i = 0; i < spawnCount; i++) {
+      let ang;
+      if (spawnCount === 1) ang = baseAngle;
+      else if (isFull) ang = baseAngle + (2*Math.PI/spawnCount)*i;
+      else ang = baseAngle - angleRange/2 + (angleRange/(spawnCount-1))*i;
+      const sdir = { x: Math.cos(ang), z: Math.sin(ang) };
+      const extraPhase = phaseSpread === 'spread' ? (i/spawnCount)*360 : 0;
+      spawnOne(sdir, extraPhase);
+    }
+  }
+  
+  function spawnOne(baseDir, extraPhase) {
     const speed = parseFloat(document.getElementById('c_speed').value);
     const amp = parseFloat(document.getElementById('c_amplitude').value);
     const freq = parseFloat(document.getElementById('c_frequency').value);
-    const phase = parseFloat(document.getElementById('c_phase').value);
+    const phase = parseFloat(document.getElementById('c_phase').value) + (extraPhase||0);
     const dir = document.getElementById('c_direction').value;
     const lifetime = parseFloat(document.getElementById('c_lifeTime').value);
     const turnSpeed = parseFloat(document.getElementById('c_turnSpeed').value);
     const maxAngle = parseFloat(document.getElementById('c_maxAngle').value);
     
-    const tgt = targetOverride || target;
-    const dx = tgt.x - caster.x;
-    const dz = tgt.z - caster.z;
-    const dist = Math.sqrt(dx*dx + dz*dz);
-    const baseDir = { x: dx/dist, z: dz/dist };
+    const dist = speed * lifetime;  // 분열체는 방향만 받으므로 사거리=속도×수명
+    const tgt = { x: caster.x + baseDir.x * dist, z: caster.z + baseDir.z * dist };
     
     const proj = {
       startX: caster.x, startZ: caster.z,
@@ -769,6 +826,23 @@ function bindSlider(id, valId, suffix, decimals) {
     const mid = { x: (proj.bezierP0.x + proj.bezierP2.x) / 2, z: (proj.bezierP0.z + proj.bezierP2.z) / 2 };
     const perp = getDirectionVector(dir, baseDir.x, baseDir.z);
     proj.bezierP1 = { x: mid.x + perp.x * amp, z: mid.z + perp.z * amp };
+    
+    // CubicBezier: P3=끝점, 제어점 2개를 같은 쪽으로 배치해 반원형 호 생성
+    // amplitude를 반원 강도로 사용. frequency를 S자 정도(0이면 반원, 클수록 S자)로 활용
+    proj.cubicP0 = { x: caster.x, z: caster.z };
+    proj.cubicP3 = { x: tgt.x, z: tgt.z };
+    const sShape = (freq - 1.5);  // frequency 1.5 기준, 작으면 반원 / 크면 S자 경향
+    // 제어점1: 시작 근처(0.0), 측면 +amp
+    proj.cubicP1 = {
+      x: caster.x + baseDir.x * (dist * 0.0) + perp.x * amp,
+      z: caster.z + baseDir.z * (dist * 0.0) + perp.z * amp
+    };
+    // 제어점2: 끝 근처(1.0), 측면 +amp (반원) 또는 부호반전(S자)
+    const p2perp = amp * (sShape > 0.5 ? -1 : 1);
+    proj.cubicP2 = {
+      x: caster.x + baseDir.x * (dist * 1.0) + perp.x * p2perp,
+      z: caster.z + baseDir.z * (dist * 1.0) + perp.z * p2perp
+    };
     
     projectiles.push(proj);
   }
@@ -809,6 +883,21 @@ function bindSlider(id, valId, suffix, decimals) {
       const ut2 = 2 * u * progress;
       p.x = u2 * p.bezierP0.x + ut2 * p.bezierP1.x + t2 * p.bezierP2.x;
       p.z = u2 * p.bezierP0.z + ut2 * p.bezierP1.z + t2 * p.bezierP2.z;
+    }
+    else if (p.curve === 'CubicBezier') {
+      let progress = (t * p.speed) / p.totalDist;
+      if (progress > 1.2) {
+        p.dead = true;
+        savedTrails.push({ trail: [...p.trail], curve: p.curve });
+        if (savedTrails.length > 5) savedTrails.shift();
+        return;
+      }
+      progress = Math.min(progress, 1.0);
+      const u = 1 - progress;
+      const uuu = u*u*u, ttt = progress*progress*progress;
+      const uut = 3*u*u*progress, utt = 3*u*progress*progress;
+      p.x = uuu*p.cubicP0.x + uut*p.cubicP1.x + utt*p.cubicP2.x + ttt*p.cubicP3.x;
+      p.z = uuu*p.cubicP0.z + uut*p.cubicP1.z + utt*p.cubicP2.z + ttt*p.cubicP3.z;
     }
     else if (p.curve === 'Spiral') {
       const fwdX = p.startX + p.baseDir.x * p.speed * t;
@@ -876,6 +965,7 @@ function bindSlider(id, valId, suffix, decimals) {
     switch(curve) {
       case 'Sine': return '29, 158, 117';
       case 'Bezier': return '127, 119, 221';
+      case 'CubicBezier': return '142, 68, 173';
       case 'Spiral': return '186, 117, 23';
       case 'Homing': return '226, 75, 74';
       case 'Zigzag': return '55, 138, 221';
@@ -1026,11 +1116,18 @@ function bindSlider(id, valId, suffix, decimals) {
         'offset = sin(2π × Frequency × t + Phase) × Amplitude',
         'finalPos = forwardPos + perpDirection × offset'
       ]},
-      Bezier: { title: 'Bezier (베지에 곡선)', lines: [
+      Bezier: { title: 'Bezier (2차 베지에)', lines: [
         'P0 = 시전자, P2 = 타겟',
         'P1 = (P0+P2)/2 + perpDirection × Amplitude',
         'progress = t × Speed / 총거리',
         'finalPos = (1-p)²P0 + 2(1-p)pP1 + p²P2'
+      ]},
+      CubicBezier: { title: 'CubicBezier (3차 베지에)', lines: [
+        'P0=시전자, P3=끝점, 제어점 2개(P1,P2)',
+        'Amplitude = 휘는 강도 (반원 크기)',
+        'Frequency < 2 → 반원 / Frequency ≥ 2 → S자',
+        'pos = (1-p)³P0 + 3(1-p)²pP1 + 3(1-p)p²P2 + p³P3',
+        '※ 제어점 같은쪽=반원, 반대쪽=S자'
       ]},
       Spiral: { title: 'Spiral (나선 회전 / 2D 투영)', lines: [
         'forwardPos = startPos + baseDirection × Speed × t',
@@ -1063,7 +1160,7 @@ function bindSlider(id, valId, suffix, decimals) {
   function updateParamVisibility() {
     const homingOnly = currentCurve === 'Homing';
     const noFreq = currentCurve === 'Bezier' || currentCurve === 'Homing';
-    const noPhase = currentCurve === 'Bezier' || currentCurve === 'Homing';
+    const noPhase = currentCurve === 'Bezier' || currentCurve === 'Homing' || currentCurve === 'CubicBezier';
     document.getElementById('c_homingPanel').style.display = homingOnly ? 'block' : 'none';
     document.getElementById('c_frequency').parentElement.style.opacity = noFreq ? '0.4' : '1';
     document.getElementById('c_frequency').disabled = noFreq;
@@ -1093,6 +1190,9 @@ function bindSlider(id, valId, suffix, decimals) {
   
   bindSlider('c_speed', 'c_speedVal', '', 1);
   bindSlider('c_amplitude', 'c_amplitudeVal', '', 1);
+  bindSlider('c_spawnCount', 'c_spawnCountVal', '', 0);
+  bindSlider('c_angleRange', 'c_angleRangeVal', '°', 0);
+  bindSlider('c_startAngle', 'c_startAngleVal', '°', 0);
   bindSlider('c_frequency', 'c_frequencyVal', '', 1);
   bindSlider('c_phase', 'c_phaseVal', '°', 0);
   bindSlider('c_lifeTime', 'c_lifeTimeVal', '', 1);
